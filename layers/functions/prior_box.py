@@ -14,28 +14,28 @@ class PriorBox(object):
     feature map.
     """
 
-    def __init__(self, input_size, feature_maps,cfg):
+    def __init__(self, input_size, cfg):
         super(PriorBox, self).__init__()
         self.imh = input_size[0]
         self.imw = input_size[1]
 
         # number of priors for feature map location (either 4 or 6)
         self.variance = cfg.VARIANCE or [0.1]
-        #self.feature_maps = cfg.FEATURE_MAPS
+        self.feature_maps = cfg.FEATURE_MAPS
         self.min_sizes = cfg.ANCHOR_SIZES
         self.steps = cfg.STEPS
         self.clip = cfg.CLIP
         for v in self.variance:
             if v <= 0:
                 raise ValueError('Variances must be greater than 0')
-        self.feature_maps = feature_maps
+        #self.feature_maps = feature_maps
 
 
     def forward(self):
         mean = []
         for k in range(len(self.feature_maps)):
-            feath = self.feature_maps[k][0]
-            featw = self.feature_maps[k][1]
+            feath = self.feature_maps[k]
+            featw = self.feature_maps[k]
             for i, j in product(range(feath), range(featw)):
                 f_kw = self.imw / self.steps[k]
                 f_kh = self.imh / self.steps[k]
@@ -55,7 +55,15 @@ class PriorBox(object):
 
 
 if __name__ == '__main__':
-    from data.config import cfg
+    import sys, os
+    this_dir = os.path.dirname(__file__)
+    sys.path.insert(0, os.path.join(this_dir, '../../data'))
+    from config import cfg
     p = PriorBox([640, 640], cfg)
     out = p.forward()
     print(out.size())
+    sum = 0
+    feature_maps = cfg.FEATURE_MAPS
+    for x in feature_maps:
+        sum += x**2
+    print(sum)

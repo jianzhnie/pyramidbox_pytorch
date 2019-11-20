@@ -50,9 +50,7 @@ class MultiBoxLoss(nn.Module):
         self.threshold = cfg.FACE.OVERLAP_THRESH
         self.match = match_ssd
 
-    def forward(self,
-                predictions,
-                targets):
+    def forward(self, predictions, priors, targets):
         """Multibox Loss
         Args:
             predictions (tuple): A tuple containing loc preds, conf preds,
@@ -65,9 +63,9 @@ class MultiBoxLoss(nn.Module):
                 shape: [batch_size,num_objs,5] (last idx is the label).
         """
         if self.use_head_loss:
-            _, _, loc_data, conf_data, priors = predictions
+            _, _, loc_data, conf_data = predictions
         else:
-            loc_data, conf_data, _, _, priors = predictions
+            loc_data, conf_data, _, _ = predictions
 
         num = loc_data.size(0)
         priors = priors[:loc_data.size(1), :]
@@ -97,7 +95,7 @@ class MultiBoxLoss(nn.Module):
         pos_idx = pos.unsqueeze(pos.dim()).expand_as(loc_data)
         loc_p = loc_data[pos_idx].view(-1, 4)
         loc_t = loc_t[pos_idx].view(-1, 4)
-        loss_l = F.smooth_l1_loss(loc_p, loc_t, size_average=False)
+        loss_l = F.smooth_l1_loss(loc_p, loc_t, reduction='sum')
         # print(loc_p)
         # Compute max conf across batch for hard negative mining
         batch_conf = conf_data.view(-1, self.num_classes)
@@ -120,7 +118,7 @@ class MultiBoxLoss(nn.Module):
         conf_p = conf_data[(pos_idx + neg_idx).gt(0)
                            ].view(-1, self.num_classes)
         targets_weighted = conf_t[(pos + neg).gt(0)]
-        loss_c = F.cross_entropy(conf_p, targets_weighted, size_average=False)
+        loss_c = F.cross_entropy(conf_p, targets_weighted, reduction='sum')
 
         # Sum of losses: L(x,c,l,g) = (Lconf(x, c) + αLloc(x,l,g)) / N
         N = num_pos.data.sum() if num_pos.data.sum() > 0 else num

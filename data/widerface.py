@@ -30,7 +30,7 @@ class WIDERDetection(data.Dataset):
             num_faces = int(line[1])
             box = []
             label = []
-            for i in xrange(num_faces):
+            for i in range(num_faces):
                 x = float(line[2 + 5 * i])
                 y = float(line[3 + 5 * i])
                 w = float(line[4 + 5 * i])
@@ -106,12 +106,7 @@ class WIDERDetection(data.Dataset):
         boxes[:, 3] /= im_height
         return boxes
 
-    def expand_bboxes(self,
-                      bboxes,
-                      expand_left=2.,
-                      expand_up=2.,
-                      expand_right=2.,
-                      expand_down=2.):
+    def expand_bboxes(self,bboxes,expand_left=2.,expand_up=2.,expand_right=2.,expand_down=2.):
         expand_bboxes = []
         for bbox in bboxes:
             xmin = bbox[0]
@@ -154,7 +149,7 @@ def detection_collate(batch):
     
 
 if __name__ == '__main__':
-    from config import cfg
+    from .config import cfg
     dataset = WIDERDetection(cfg.FACE.TRAIN_FILE)
     #for i in range(len(dataset)):
     dataset.pull_item(14)
