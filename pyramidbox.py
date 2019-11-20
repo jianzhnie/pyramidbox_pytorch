@@ -3,15 +3,15 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-
+import os
 import torch
 import torch.nn as nn
 import torch.nn.init as init
 from torch.autograd import Function
 import torch.nn.functional as F
 from torch.autograd import Variable
-import os
-from layers import *
+from layers import L2Norm,Detect
+from layers import MultiBoxLoss
 from data.config import cfg
 import numpy as np
 
@@ -73,13 +73,7 @@ class CPM(nn.Module):
 class PyramidBox(nn.Module):
     """docstring for PyramidBox"""
 
-    def __init__(self,
-                 phase,
-                 base,
-                 extras,
-                 lfpn_cpm,
-                 head,
-                 num_classes):
+    def __init__(self,phase,base,extras,lfpn_cpm,head,num_classes):
         super(PyramidBox, self).__init__()
         #self.use_transposed_conv2d = use_transposed_conv2d
 
@@ -90,14 +84,28 @@ class PyramidBox(nn.Module):
         self.L2Norm4_3 = L2Norm(512, 8)
         self.L2Norm5_3 = L2Norm(512, 5)
         
+        """
+        self.lfpn_topdown = nn.ModuleList([
+            nn.Conv2d(1024, 512, 1, 1),
+            nn.Conv2d(512, 512, 1, 1),
+            nn.Conv2d(512, 256, 1, 1)
+        ])
+        self.lfpn_later = nn.ModuleList([
+            nn.Conv2d(512, 512, 1, 1),
+            nn.Conv2d(512, 512, 1, 1),
+            nn.Conv2d(256, 256, 1, 1)
+        ])
+        self.cpm = nn.ModuleList([
+            CPM(256), CPM(512), CPM(512),
+            CPM(1024), CPM(512), CPM(256)
+        ])
+        """
         self.lfpn_topdown = nn.ModuleList(lfpn_cpm[0])
         self.lfpn_later = nn.ModuleList(lfpn_cpm[1])
         self.cpm = nn.ModuleList(lfpn_cpm[2])
 
         self.loc_layers = nn.ModuleList(head[0])
         self.conf_layers = nn.ModuleList(head[1])
-
-        
 
         self.is_infer = False
         if phase == 'test':
@@ -106,11 +114,24 @@ class PyramidBox(nn.Module):
             self.is_infer = True
 
     def _upsample_prod(self, x, y):
-        _, _, H, W = y.size()
-        return F.upsample(x, size=(H, W), mode='bilinear') * y
+        '''Upsample and add two feature maps.
+        Args:
+          x: (Variable) top feature map to be upsampled.
+          y: (Variable) lateral feature map.
+        Returns:
+          (Variable) added feature map.
+        Note in PyTorch, when input size is odd, the upsampled feature map
+        with `F.upsample(..., scale_factor=2, mode='nearest')`
+        maybe not equal to the lateral feature map size.
+        e.g.
+        original input size: [N,_,15,15] ->
+        conv2d feature map size: [N,_,8,8] ->
+        upsampled feature map size: [N,_,16,16]
+        So we choose bilinear upsample which supports arbitrary output sizes.
+        '''
+        return F.interpolate(x, size=y.shape[2:], mode="bilinear", align_corners=True) * y
 
     def forward(self, x):
-        size = x.size()[2:]
 
         # apply vgg up to conv3_3 relu
         for k in range(16):
@@ -120,11 +141,11 @@ class PyramidBox(nn.Module):
         for k in range(16, 23):
             x = self.vgg[k](x)
         conv4_3 = x
-
+        # apply vgg up to conv5_3
         for k in range(23, 30):
             x = self.vgg[k](x)
         conv5_3 = x
-
+        # apply vgg up to fc7
         for k in range(30, len(self.vgg)):
             x = self.vgg[k](x)
         convfc_7 = x
@@ -239,16 +260,12 @@ class PyramidBox(nn.Module):
             head_mbox_loc = torch.cat(head_locs, dim=1)
             head_mbox_conf = torch.cat(head_confs, dim=1)
 
-        priors_boxes = PriorBox(size, feature_maps, cfg)
-        priors = Variable(priors_boxes.forward(), volatile=True)
-
         if not self.is_infer:
             output = (face_mbox_loc, face_mbox_conf,
-                      head_mbox_loc, head_mbox_conf, priors)
+                      head_mbox_loc, head_mbox_conf)
         else:
             output = self.detect(face_mbox_loc,
-                                 self.softmax(face_mbox_conf),
-                                 priors)
+                                 self.softmax(face_mbox_conf))
 
         return output
 
