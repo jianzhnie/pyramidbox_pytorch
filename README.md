@@ -1,6 +1,5 @@
-## PyramidBox: A Context-assisted Single Shot Face Detector.##
-
-[A PyTorch Implementation of PyramidBox](https://arxiv.org/abs/1803.07737)
+## A PyTorch Implementation of PyramidBox ##
+[PyramidBox: A Context-assisted Single Shot Face Detector.](https://arxiv.org/abs/1803.07737)
 
 
 ### Description
