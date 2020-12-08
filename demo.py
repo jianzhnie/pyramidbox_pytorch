@@ -19,6 +19,7 @@ from PIL import Image
 
 from data.config import cfg
 from pyramidbox import build_net
+from layers import PriorBox
 from utils.augmentations import to_chw_bgr
 
 parser = argparse.ArgumentParser(description='pyramidbox demo')
@@ -96,6 +97,12 @@ def detect(net, img_path, thresh):
 
 
 if __name__ == '__main__':
+    # load PriorBox
+    with torch.no_grad():
+        priorbox = PriorBox(input_size=[640,640], cfg=cfg)
+        priors = priorbox.forward()
+        priors = priors.cuda()
+        
     net = build_net('test', cfg.NUM_CLASSES)
     net.load_state_dict(torch.load(args.model))
     net.eval()
@@ -104,6 +111,7 @@ if __name__ == '__main__':
         net.cuda()
         cudnn.benckmark = True
 
+   
     img_path = './img'
     img_list = [os.path.join(img_path, x)
                 for x in os.listdir(img_path) if x.endswith('jpg')]
